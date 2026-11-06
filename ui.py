@@ -115,6 +115,7 @@ class MainWindow(QMainWindow):
 
     def connect_database(self):
         connection = sqlite3.connect(self.database_path)
+        connection.execute("PRAGMA foreign_keys = ON")
         connection.row_factory = sqlite3.Row
         return connection
 
@@ -220,6 +221,6 @@ def run():
         window = MainWindow()
     except sqlite3.Error as error:
         QMessageBox.critical(None, "Σφάλμα βάσης δεδομένων", str(error))
-        return
+        sys.exit(1)
     window.show()
     sys.exit(app.exec_())
