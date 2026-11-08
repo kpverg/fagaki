@@ -147,20 +147,47 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual(connection.execute("SELECT posotita FROM fagaki_ulika").fetchone(),
                              (0.5,))
 
+    def test_existing_links_keep_their_unit_after_migration(self):
+        old_path = Path(self.directory.name) / "old_link_units.db"
+        with closing(sqlite3.connect(old_path)) as connection, connection:
+            connection.execute(
+                "CREATE TABLE fagaki (id INTEGER PRIMARY KEY, name TEXT NOT NULL, "
+                "selectedday TEXT, ulika TEXT NOT NULL, isnistisimo INTEGER NOT NULL, "
+                "syntagi TEXT NOT NULL DEFAULT '', imera_id INTEGER)"
+            )
+            connection.execute(
+                "CREATE TABLE ulika (id INTEGER PRIMARY KEY, name TEXT NOT NULL, "
+                "monada_metrisis TEXT NOT NULL, katigoria TEXT NOT NULL DEFAULT 'άλλα', "
+                "exoapothema INTEGER NOT NULL DEFAULT 0)"
+            )
+            connection.execute(
+                "CREATE TABLE fagaki_ulika (fagaki_id INTEGER NOT NULL REFERENCES fagaki(id), "
+                "ulika_id INTEGER NOT NULL REFERENCES ulika(id), posotita REAL, "
+                "PRIMARY KEY (fagaki_id, ulika_id))"
+            )
+            connection.execute("INSERT INTO fagaki VALUES (1, 'Α', NULL, '', 1, '', 1)")
+            connection.execute("INSERT INTO ulika VALUES (1, 'Αλεύρι', 'κιλό', 'άλλα', 0)")
+            connection.execute("INSERT INTO fagaki_ulika VALUES (1, 1, 0.5)")
+        initialize_database(old_path)
+        initialize_database(old_path)
+        with closing(sqlite3.connect(old_path)) as connection, connection:
+            self.assertEqual(connection.execute(
+                "SELECT fagaki_id, ulika_id, posotita, monada_metrisis FROM fagaki_ulika"
+            ).fetchall(), [(1, 1, 0.5, "κιλό")])
+            connection.execute(
+                "INSERT INTO fagaki_ulika VALUES (1, 1, 2, 'κ.σ.')"
+            )
+
     def test_ingredient_units_and_stock_are_constrained(self):
-        for unit in ("τεμάχιο", "συσκευασία", "κιλό"):
+        for unit in ("τεμάχιο", "συσκευασία", "κιλό", "λίτρο", "ml", "κ.σ.", "κ.γ."):
             self.connection.execute(
                 "INSERT INTO ulika (name, monada_metrisis) VALUES (?, ?)",
                 ("Υλικό", unit),
             )
         self.assertEqual(
             self.connection.execute("SELECT exoapothema FROM ulika").fetchall(),
-            [(0,), (0,), (0,)],
+            [(0,), (0,), (0,), (0,), (0,), (0,), (0,)],
         )
-        with self.assertRaises(sqlite3.IntegrityError):
-            self.connection.execute(
-                "INSERT INTO ulika (name, monada_metrisis) VALUES ('Υλικό', 'λίτρο')"
-            )
         with self.assertRaises(sqlite3.IntegrityError):
             self.connection.execute(
                 "INSERT INTO ulika (name, monada_metrisis, exoapothema) "
